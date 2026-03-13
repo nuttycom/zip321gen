@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2c2c2c">
+<title>ZIP 321 Payment Request Generator</title>
+<link rel="manifest" href="zip-0321-manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --panel-bg: #ffffff;
+    --border: #d4d0c8;
+    --text: #2c2c2c;
+    --text-muted: #666660;
+    --accent: #f4a026;
+    --accent-hover: #d98c1c;
+    --error: #c62828;
+    --error-bg: #fbe9e7;
+    --warn: #e65100;
+    --warn-bg: #fff3e0;
+    --success: #2e7d32;
+    --success-bg: #e8f5e9;
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  header {
+    background: var(--text);
+    color: #fff;
+    padding: 16px 24px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  header .badge {
+    font-size: 11px;
+    background: var(--accent);
+    color: var(--text);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 1200px;
+    margin: 24px auto;
+    padding: 0 24px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  @media (max-width: 800px) {
+    .container {
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 0 12px;
+      margin: 12px auto;
+    }
+    header h1 { font-size: 16px; }
+  }
+
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  @media (max-width: 800px) {
+    .panel { padding: 16px; }
+  }
+
+  .panel h2 {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  /* Network toggle */
+  .network-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .network-toggle button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: var(--bg);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .network-toggle button.active {
+    background: var(--text);
+    color: #fff;
+  }
+
+  .network-toggle button:not(.active):hover {
+    background: var(--border);
+  }
+
+  /* Recipient cards */
+  .recipient {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .recipient-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .recipient-header span {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .btn-remove {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-remove:hover {
+    border-color: var(--error);
+    color: var(--error);
+  }
+
+  .field { margin-bottom: 10px; }
+
+  .field:last-child { margin-bottom: 0; }
+
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .field input, .field textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    background: #fff;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+
+  .field input:focus, .field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .field textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .field .hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  .field .field-error {
+    font-size: 11px;
+    color: var(--error);
+    margin-top: 3px;
+  }
+
+  .field input.invalid, .field textarea.invalid {
+    border-color: var(--error);
+  }
+
+  .btn-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 100%;
+    justify-content: center;
+    transition: border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  /* Output panel */
+  .qr-container {
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+  }
+
+  .qr-container svg, .qr-container img, .qr-container canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .qr-placeholder {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .qr-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .qr-actions button {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .qr-actions button:hover {
+    border-color: var(--accent);
+  }
+
+  .qr-actions button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .uri-box {
+    position: relative;
+    margin-bottom: 4px;
+  }
+
+  .uri-display {
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    padding-right: 70px;
+    min-height: 60px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .btn-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-copy:hover {
+    background: var(--accent-hover);
+  }
+
+  .btn-copy.copied {
+    background: var(--success);
+  }
+
+  /* Warnings */
+  .alert {
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    margin-bottom: 12px;
+    display: none;
+  }
+
+  .alert.visible { display: block; }
+
+  .alert-warn {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+  }
+
+  .alert-error {
+    background: var(--error-bg);
+    border: 1px solid var(--error);
+    color: var(--error);
+  }
+
+  .uri-length {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ZIP 321 Payment Request URI Generator</h1>
+  <span class="badge">ZIP 321</span>
+</header>
+
+<div class="container">
+  <!-- Left panel: Input form -->
+  <div class="panel">
+    <h2>Payment Details</h2>
+
+    <div class="network-toggle">
+      <button class="active" data-network="mainnet" onclick="setNetwork('mainnet')">Mainnet</button>
+      <button data-network="testnet" onclick="setNetwork('testnet')">Testnet</button>
+    </div>
+
+    <div id="recipients"></div>
+
+    <button class="btn-add" onclick="addRecipient()">+ Add Recipient</button>
+  </div>
+
+  <!-- Right panel: Output -->
+  <div class="panel">
+    <h2>Payment Request</h2>
+
+    <div id="alert-warn" class="alert alert-warn"></div>
+    <div id="alert-error" class="alert alert-error"></div>
+
+    <div class="qr-container" id="qr-container">
+      <div class="qr-placeholder" id="qr-placeholder">Enter a recipient address to generate a QR code</div>
+    </div>
+
+    <div class="qr-actions">
+      <button id="btn-save" onclick="saveQr()" disabled>Save QR Image</button>
+      <button id="btn-share" onclick="shareQr()" disabled style="display:none">Share QR</button>
+    </div>
+
+    <div class="uri-box">
+      <div class="uri-display" id="uri-display">zcash:?</div>
+      <button class="btn-copy" id="btn-copy" onclick="copyUri()">Copy</button>
+    </div>
+    <div class="uri-length" id="uri-length"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // --- State ---
+  var state = {
+    network: 'mainnet',
+    recipients: [],
+    nextId: 0,
+    currentQr: null
+  };
+
+  // Show share button if Web Share API is available
+  if (navigator.share && navigator.canShare) {
+    document.getElementById('btn-share').style.display = '';
+  }
+
+  // --- Address validation ---
+  var ADDRESS_PREFIXES = {
+    mainnet: {
+      transparent: ['t1', 't3'],
+      sapling: ['zs'],
+      unified: ['u1']
+    },
+    testnet: {
+      transparent: ['tm', 't2'],
+      sapling: ['ztestsapling'],
+      unified: ['utest']
+    }
+  };
+
+  function classifyAddress(addr, network) {
+    var prefixes = ADDRESS_PREFIXES[network];
+    for (var i = 0; i < prefixes.transparent.length; i++) {
+      if (addr.indexOf(prefixes.transparent[i]) === 0) return 'transparent';
+    }
+    for (var i = 0; i < prefixes.sapling.length; i++) {
+      if (addr.indexOf(prefixes.sapling[i]) === 0) return 'sapling';
+    }
+    for (var i = 0; i < prefixes.unified.length; i++) {
+      if (addr.indexOf(prefixes.unified[i]) === 0) return 'unified';
+    }
+    return 'unknown';
+  }
+
+  function prefixHints(network) {
+    var p = ADDRESS_PREFIXES[network];
+    return p.transparent.concat(p.sapling).concat(p.unified).join(', ');
+  }
+
+  // --- Base64url encoding ---
+  function toBase64url(str) {
+    var bytes = new TextEncoder().encode(str);
+    if (bytes.length > 512) return null;
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    var b64 = btoa(binary);
+    return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  // --- Amount validation ---
+  function validateAmount(val) {
+    if (val === '') return { valid: true, value: '' };
+    if (!/^\d+(\.\d{1,8})?$/.test(val)) {
+      return { valid: false, error: 'Invalid format. Use digits with optional decimal point (max 8 decimal places).' };
+    }
+    var num = parseFloat(val);
+    if (num > 21000000) {
+      return { valid: false, error: 'Amount cannot exceed 21,000,000 ZEC.' };
+    }
+    if (num < 0) {
+      return { valid: false, error: 'Amount must be non-negative.' };
+    }
+    return { valid: true, value: val };
+  }
+
+  // --- URI Construction ---
+  function buildUri() {
+    var recipients = state.recipients;
+    var validRecipients = recipients.filter(function (r) {
+      return r.address.trim() !== '';
+    });
+
+    if (validRecipients.length === 0) {
+      return 'zcash:?';
+    }
+
+    if (validRecipients.length === 1) {
+      var r = validRecipients[0];
+      var hierPartAddr = r.address.trim();
+      var params = buildParamsForRecipient(r, '');
+      if (params.length > 0) {
+        return 'zcash:' + hierPartAddr + '?' + params.join('&');
+      }
+      return 'zcash:' + hierPartAddr;
+    }
+
+    var parts = [];
+    for (var i = 0; i < validRecipients.length; i++) {
+      var r = validRecipients[i];
+      var suffix = i === 0 ? '' : '.' + i;
+      parts.push('address' + suffix + '=' + r.address.trim());
+      var params = buildParamsForRecipient(r, suffix);
+      parts = parts.concat(params);
+    }
+
+    return 'zcash:?' + parts.join('&');
+  }
+
+  function buildParamsForRecipient(r, suffix) {
+    var params = [];
+    var amt = r.amount.trim();
+    if (amt !== '' && validateAmount(amt).valid) {
+      params.push('amount' + suffix + '=' + amt);
+    }
+    var memo = r.memo.trim();
+    if (memo !== '') {
+      var encoded = toBase64url(memo);
+      if (encoded !== null) {
+        params.push('memo' + suffix + '=' + encoded);
+      }
+    }
+    return params;
+  }
+
+  // --- QR Code generation ---
+  // QR Version 40, Error Correction L, byte mode = 2,953 bytes max
+  var QR_MAX_BYTES = 2953;
+  var QR_WARN_THRESHOLD = 2500;
+
+  function generateQr(data) {
+    // Try explicit versions from small to large.
+    // Byte-mode capacities at EC level L for selected versions:
+    //   V5:154  V10:652  V15:1156  V20:1628  V25:2188  V30:2724  V35:3320  V40:2953
+    // Start from version 5 and step up to avoid unnecessary iterations.
+    var versions = [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
+    for (var vi = 0; vi < versions.length; vi++) {
+      try {
+        var qr = qrcode(versions[vi], 'L');
+        qr.addData(data);
+        qr.make();
+        return qr;
+      } catch (e) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  function renderQr(uri) {
+    var container = document.getElementById('qr-container');
+    var placeholder = document.getElementById('qr-placeholder');
+    var alertWarn = document.getElementById('alert-warn');
+    var alertError = document.getElementById('alert-error');
+    var uriLenEl = document.getElementById('uri-length');
+    var btnSave = document.getElementById('btn-save');
+    var btnShare = document.getElementById('btn-share');
+
+    var len = new TextEncoder().encode(uri).length;
+    uriLenEl.textContent = len + ' bytes (max ' + QR_MAX_BYTES + ')';
+
+    alertWarn.classList.remove('visible');
+    alertError.classList.remove('visible');
+
+    if (len > QR_MAX_BYTES) {
+      alertError.textContent = 'URI size (' + len + ' bytes) exceeds QR code capacity (' + QR_MAX_BYTES + ' bytes). Reduce recipients or memo lengths.';
+      alertError.classList.add('visible');
+    } else if (len > QR_WARN_THRESHOLD) {
+      alertWarn.textContent = 'URI size (' + len + ' bytes) is approaching QR code maximum capacity (' + QR_MAX_BYTES + ' bytes).';
+      alertWarn.classList.add('visible');
+    }
+
+    var hasAddress = state.recipients.some(function (r) { return r.address.trim() !== ''; });
+    if (uri === 'zcash:?' || !hasAddress) {
+      container.innerHTML = '';
+      placeholder.style.display = '';
+      container.appendChild(placeholder);
+      state.currentQr = null;
+      btnSave.disabled = true;
+      btnShare.disabled = true;
+      return;
+    }
+
+    var qr = generateQr(uri);
+    if (qr) {
+      container.innerHTML = qr.createSvgTag(4, 0);
+      placeholder.style.display = 'none';
+      state.currentQr = qr;
+      btnSave.disabled = false;
+      btnShare.disabled = false;
+    } else {
+      container.innerHTML = '';
+      var errDiv = document.createElement('div');
+      errDiv.className = 'qr-placeholder';
+      errDiv.textContent = 'URI too long to encode as QR code.';
+      container.appendChild(errDiv);
+      state.currentQr = null;
+      btnSave.disabled = true;
+      btnShare.disabled = true;
+      alertError.textContent = 'Failed to generate QR code: URI is too long (' + len + ' bytes). Reduce recipients or memo lengths.';
+      alertError.classList.add('visible');
+    }
+  }
+
+  // --- QR to Canvas/PNG ---
+  function qrToCanvas(qr, scale) {
+    var count = qr.getModuleCount();
+    var margin = 4;
+    var size = count * scale + margin * 2 * scale;
+    var canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000000';
+    for (var row = 0; row < count; row++) {
+      for (var col = 0; col < count; col++) {
+        if (qr.isDark(row, col)) {
+          ctx.fillRect(
+            (col + margin) * scale,
+            (row + margin) * scale,
+            scale,
+            scale
+          );
+        }
+      }
+    }
+    return canvas;
+  }
+
+  function qrToBlob(qr, callback) {
+    var canvas = qrToCanvas(qr, 10);
+    canvas.toBlob(function (blob) {
+      callback(blob);
+    }, 'image/png');
+  }
+
+  // --- Save QR as image ---
+  window.saveQr = function () {
+    if (!state.currentQr) return;
+    qrToBlob(state.currentQr, function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'zcash-payment-request.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+  };
+
+  // --- Share QR via Web Share API ---
+  window.shareQr = function () {
+    if (!state.currentQr || !navigator.share) return;
+    qrToBlob(state.currentQr, function (blob) {
+      var file = new File([blob], 'zcash-payment-request.png', { type: 'image/png' });
+      var shareData = { files: [file], title: 'Zcash Payment Request' };
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        navigator.share(shareData).catch(function () {});
+      } else {
+        // Fallback: share just the URI text
+        navigator.share({
+          title: 'Zcash Payment Request',
+          text: document.getElementById('uri-display').textContent
+        }).catch(function () {});
+      }
+    });
+  };
+
+  // --- Validation messages per recipient ---
+  function validateRecipients() {
+    state.recipients.forEach(function (r) {
+      var el = document.getElementById('recipient-' + r.id);
+      if (!el) return;
+
+      var addrInput = el.querySelector('.addr-input');
+      var amtInput = el.querySelector('.amt-input');
+      var memoTextarea = el.querySelector('.memo-input');
+      var addrError = el.querySelector('.addr-error');
+      var amtError = el.querySelector('.amt-error');
+      var memoHint = el.querySelector('.memo-hint');
+      var memoError = el.querySelector('.memo-error');
+
+      var addr = r.address.trim();
+      addrInput.classList.remove('invalid');
+      addrError.textContent = '';
+      if (addr !== '') {
+        var addrType = classifyAddress(addr, state.network);
+        if (addrType === 'unknown') {
+          addrInput.classList.add('invalid');
+          addrError.textContent = 'Address prefix not recognized for ' + state.network + '. Expected: ' + prefixHints(state.network);
+        }
+        if (addrType === 'transparent' && r.memo.trim() !== '') {
+          addrInput.classList.add('invalid');
+          addrError.textContent = 'Memos cannot be used with transparent addresses.';
+          memoTextarea.classList.add('invalid');
+        } else {
+          memoTextarea.classList.remove('invalid');
+        }
+      }
+
+      var amtResult = validateAmount(r.amount);
+      amtInput.classList.remove('invalid');
+      amtError.textContent = '';
+      if (!amtResult.valid) {
+        amtInput.classList.add('invalid');
+        amtError.textContent = amtResult.error;
+      }
+
+      var memoBytes = new TextEncoder().encode(r.memo).length;
+      memoHint.textContent = memoBytes + ' / 512 bytes';
+      memoError.textContent = '';
+      if (memoBytes > 512) {
+        memoTextarea.classList.add('invalid');
+        memoError.textContent = 'Memo exceeds 512-byte limit.';
+        memoHint.textContent = memoBytes + ' / 512 bytes (exceeded)';
+      }
+    });
+  }
+
+  // --- Render ---
+  function update() {
+    validateRecipients();
+    var uri = buildUri();
+    document.getElementById('uri-display').textContent = uri;
+    renderQr(uri);
+  }
+
+  // --- Recipient management ---
+  function createRecipientEl(r, index, total) {
+    var div = document.createElement('div');
+    div.className = 'recipient';
+    div.id = 'recipient-' + r.id;
+
+    var header = document.createElement('div');
+    header.className = 'recipient-header';
+    var label = document.createElement('span');
+    label.textContent = 'Recipient ' + (index + 1);
+    header.appendChild(label);
+
+    if (total > 1) {
+      var removeBtn = document.createElement('button');
+      removeBtn.className = 'btn-remove';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.title = 'Remove recipient';
+      removeBtn.setAttribute('data-id', r.id);
+      removeBtn.addEventListener('click', function () {
+        removeRecipient(r.id);
+      });
+      header.appendChild(removeBtn);
+    }
+
+    div.appendChild(header);
+
+    // Address field
+    var addrField = document.createElement('div');
+    addrField.className = 'field';
+    addrField.innerHTML =
+      '<label>Address</label>' +
+      '<input type="text" class="addr-input" placeholder="Zcash address" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="' + escapeAttr(r.address) + '">' +
+      '<div class="hint">Prefixes: ' + escapeHtml(prefixHints(state.network)) + '</div>' +
+      '<div class="field-error addr-error"></div>';
+    addrField.querySelector('.addr-input').addEventListener('input', function (e) {
+      r.address = e.target.value;
+      update();
+    });
+    div.appendChild(addrField);
+
+    // Amount field
+    var amtField = document.createElement('div');
+    amtField.className = 'field';
+    amtField.innerHTML =
+      '<label>Amount (ZEC)</label>' +
+      '<input type="text" class="amt-input" inputmode="decimal" placeholder="0.00000000" autocomplete="off" value="' + escapeAttr(r.amount) + '">' +
+      '<div class="field-error amt-error"></div>';
+    amtField.querySelector('.amt-input').addEventListener('input', function (e) {
+      r.amount = e.target.value;
+      update();
+    });
+    div.appendChild(amtField);
+
+    // Memo field
+    var memoField = document.createElement('div');
+    memoField.className = 'field';
+    memoField.innerHTML =
+      '<label>Memo</label>' +
+      '<textarea class="memo-input" placeholder="Optional memo text (will be base64url-encoded)">' + escapeHtml(r.memo) + '</textarea>' +
+      '<div class="hint memo-hint">0 / 512 bytes</div>' +
+      '<div class="field-error memo-error"></div>';
+    memoField.querySelector('.memo-input').addEventListener('input', function (e) {
+      r.memo = e.target.value;
+      update();
+    });
+    div.appendChild(memoField);
+
+    return div;
+  }
+
+  function renderRecipients() {
+    var container = document.getElementById('recipients');
+    container.innerHTML = '';
+    var total = state.recipients.length;
+    state.recipients.forEach(function (r, i) {
+      container.appendChild(createRecipientEl(r, i, total));
+    });
+    update();
+  }
+
+  window.addRecipient = function () {
+    state.recipients.push({
+      id: state.nextId++,
+      address: '',
+      amount: '',
+      memo: ''
+    });
+    renderRecipients();
+  };
+
+  function removeRecipient(id) {
+    state.recipients = state.recipients.filter(function (r) { return r.id !== id; });
+    renderRecipients();
+  }
+
+  // --- Network toggle ---
+  window.setNetwork = function (network) {
+    state.network = network;
+    var buttons = document.querySelectorAll('.network-toggle button');
+    buttons.forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-network') === network);
+    });
+    renderRecipients();
+  };
+
+  // --- Copy ---
+  window.copyUri = function () {
+    var uri = document.getElementById('uri-display').textContent;
+    var btn = document.getElementById('btn-copy');
+    navigator.clipboard.writeText(uri).then(function () {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1500);
+    }).catch(function () {
+      var textarea = document.createElement('textarea');
+      textarea.value = uri;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 1500);
+    });
+  };
+
+  // --- Helpers ---
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+  }
+
+  function escapeAttr(s) {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // --- Init ---
+  addRecipient();
+
+  // --- Service Worker Registration ---
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('zip-0321-sw.js').catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>

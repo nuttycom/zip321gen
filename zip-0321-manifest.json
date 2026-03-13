@@ -1,0 +1,10 @@
+{
+  "name": "ZIP 321 Payment Request Generator",
+  "short_name": "ZIP 321",
+  "description": "Generate Zcash payment request URIs and QR codes per ZIP 321",
+  "start_url": "zip-0321-tool.html",
+  "display": "standalone",
+  "background_color": "#f5f5f0",
+  "theme_color": "#2c2c2c",
+  "icons": []
+}
