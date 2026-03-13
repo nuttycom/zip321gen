@@ -1255,8 +1255,9 @@
     if (code && code.data) {
       var parsed = parseScannedData(code.data);
       if (parsed.length > 0 && parsed[0].address) {
-        applyScanResult(parsed);
+        var target = scanner.targetRecipient;
         closeScannerInternal();
+        applyScanResult(parsed, target);
         return;
       }
     }
@@ -1264,8 +1265,7 @@
     scanner.animFrameId = requestAnimationFrame(scanFrame);
   }
 
-  function applyScanResult(parsed) {
-    var target = scanner.targetRecipient;
+  function applyScanResult(parsed, target) {
     // Apply the first parsed recipient to the target that triggered the scan
     target.address = parsed[0].address;
     if (parsed[0].amount) target.amount = parsed[0].amount;
