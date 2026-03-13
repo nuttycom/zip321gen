@@ -9,6 +9,7 @@
 <title>ZIP 321 Payment Request Generator</title>
 <link rel="manifest" href="zip-0321-manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
   :root {
     --bg: #f5f5f0;
@@ -383,6 +384,176 @@
     text-align: right;
     margin-bottom: 12px;
   }
+
+  /* Address input row with scan button */
+  .addr-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .addr-row input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .btn-scan {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-scan:hover {
+    border-color: var(--accent);
+  }
+
+  .btn-scan svg {
+    width: 20px;
+    height: 20px;
+    fill: var(--text-muted);
+  }
+
+  .btn-scan:hover svg {
+    fill: var(--text);
+  }
+
+  /* Scanner overlay */
+  .scanner-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: #000;
+    flex-direction: column;
+  }
+
+  .scanner-overlay.active {
+    display: flex;
+  }
+
+  .scanner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    z-index: 1;
+  }
+
+  .scanner-header span {
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .btn-scanner-close {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius);
+    color: #fff;
+    font-size: 14px;
+    padding: 8px 16px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .scanner-body {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanner-body video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .scanner-body canvas {
+    display: none;
+  }
+
+  .scanner-reticle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(280px, 70vw);
+    height: min(280px, 70vw);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    pointer-events: none;
+  }
+
+  .scanner-reticle::before,
+  .scanner-reticle::after {
+    content: '';
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+
+  .scanner-reticle::before {
+    top: -1px;
+    left: -1px;
+    border-width: 3px 0 0 3px;
+    border-radius: 8px 0 0 0;
+  }
+
+  .scanner-reticle::after {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 3px 3px 0;
+    border-radius: 0 0 8px 0;
+  }
+
+  /* Extra corners via the reticle's children */
+  .scanner-corner-tr,
+  .scanner-corner-bl {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+
+  .scanner-corner-tr {
+    top: -1px;
+    right: -1px;
+    border-width: 3px 3px 0 0;
+    border-radius: 0 8px 0 0;
+  }
+
+  .scanner-corner-bl {
+    bottom: -1px;
+    left: -1px;
+    border-width: 0 0 3px 3px;
+    border-radius: 0 0 0 8px;
+  }
+
+  .scanner-status {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.7);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+  }
 </style>
 </head>
 <body>
@@ -428,6 +599,23 @@
       <button class="btn-copy" id="btn-copy" onclick="copyUri()">Copy</button>
     </div>
     <div class="uri-length" id="uri-length"></div>
+  </div>
+</div>
+
+<!-- QR Scanner overlay -->
+<div class="scanner-overlay" id="scanner-overlay">
+  <div class="scanner-header">
+    <span>Scan Address QR Code</span>
+    <button class="btn-scanner-close" onclick="closeScanner()">Cancel</button>
+  </div>
+  <div class="scanner-body">
+    <video id="scanner-video" playsinline></video>
+    <canvas id="scanner-canvas"></canvas>
+    <div class="scanner-reticle">
+      <div class="scanner-corner-tr"></div>
+      <div class="scanner-corner-bl"></div>
+    </div>
+    <div class="scanner-status" id="scanner-status">Point camera at a QR code</div>
   </div>
 </div>
 
@@ -794,12 +982,22 @@
     addrField.className = 'field';
     addrField.innerHTML =
       '<label>Address</label>' +
-      '<input type="text" class="addr-input" placeholder="Zcash address" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="' + escapeAttr(r.address) + '">' +
+      '<div class="addr-row">' +
+        '<input type="text" class="addr-input" placeholder="Zcash address" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="' + escapeAttr(r.address) + '">' +
+        '<button type="button" class="btn-scan" title="Scan QR code">' +
+          '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M3 5V3h4v2H5v2H3V5zm18 0V3h-4v2h2v2h2V5zM3 19v2h4v-2H5v-2H3v2zm18 0v2h-4v-2h2v-2h2v2zM7 7h4v4H7V7zm0 6h4v4H7v-4zm6-6h4v4h-4V7zm0 6h4v4h-4v-4z"/>' +
+          '</svg>' +
+        '</button>' +
+      '</div>' +
       '<div class="hint">Prefixes: ' + escapeHtml(prefixHints(state.network)) + '</div>' +
       '<div class="field-error addr-error"></div>';
     addrField.querySelector('.addr-input').addEventListener('input', function (e) {
       r.address = e.target.value;
       update();
+    });
+    addrField.querySelector('.btn-scan').addEventListener('click', function () {
+      openScanner(r);
     });
     div.appendChild(addrField);
 
@@ -895,6 +1093,205 @@
         btn.classList.remove('copied');
       }, 1500);
     });
+  };
+
+  // --- QR Scanner ---
+  var scanner = {
+    stream: null,
+    animFrameId: null,
+    targetRecipient: null
+  };
+
+  // Decode a base64url-encoded memo back to a string
+  function fromBase64url(encoded) {
+    // Restore standard base64: - -> +, _ -> /, add padding
+    var b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4 !== 0) b64 += '=';
+    try {
+      var binary = atob(b64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return new TextDecoder().decode(bytes);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // Parse a scanned string. Returns an array of {address, amount, memo} objects.
+  function parseScannedData(data) {
+    var trimmed = data.trim();
+
+    if (trimmed.indexOf('zcash:') !== 0) {
+      // Plain address string
+      return [{ address: trimmed, amount: '', memo: '' }];
+    }
+
+    var afterScheme = trimmed.substring(6);
+    var hierAddr = '';
+    var queryStr = '';
+    var qIdx = afterScheme.indexOf('?');
+
+    if (qIdx >= 0) {
+      hierAddr = afterScheme.substring(0, qIdx);
+      queryStr = afterScheme.substring(qIdx + 1);
+    } else {
+      hierAddr = afterScheme;
+    }
+
+    // Parse query params into a map keyed by (paramName, index)
+    var paramMap = {}; // key: "paramName:index" -> value
+    if (queryStr) {
+      var pairs = queryStr.split('&');
+      for (var i = 0; i < pairs.length; i++) {
+        var eqIdx = pairs[i].indexOf('=');
+        if (eqIdx < 0) continue;
+        var key = pairs[i].substring(0, eqIdx);
+        var val = pairs[i].substring(eqIdx + 1);
+        // Split key into name and paramindex: "amount.1" -> ("amount", "1"), "amount" -> ("amount", "")
+        var dotIdx = key.indexOf('.');
+        var name, pidx;
+        if (dotIdx >= 0) {
+          name = key.substring(0, dotIdx);
+          pidx = key.substring(dotIdx + 1);
+        } else {
+          name = key;
+          pidx = '';
+        }
+        paramMap[name + ':' + pidx] = val;
+      }
+    }
+
+    // Collect all recipient indices
+    var indices = {};
+    // The hier-part address corresponds to the empty index
+    if (hierAddr) {
+      indices[''] = true;
+    }
+    for (var k in paramMap) {
+      var parts = k.split(':');
+      indices[parts[1]] = true;
+    }
+
+    var recipients = [];
+    for (var idx in indices) {
+      var addr = '';
+      if (idx === '' && hierAddr) {
+        addr = hierAddr;
+      }
+      if (paramMap['address:' + idx]) {
+        addr = paramMap['address:' + idx];
+      }
+      if (!addr) continue;
+
+      var amount = paramMap['amount:' + idx] || '';
+      var memoEncoded = paramMap['memo:' + idx] || '';
+      var memo = memoEncoded ? fromBase64url(memoEncoded) : '';
+
+      recipients.push({ address: addr, amount: amount, memo: memo });
+    }
+
+    // Sort: empty index first, then by numeric index
+    recipients.sort(function (a, b) { return 0; }); // preserve insertion order
+
+    return recipients.length > 0 ? recipients : [{ address: '', amount: '', memo: '' }];
+  }
+
+  function openScanner(recipient) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Camera access is not available in this browser.');
+      return;
+    }
+
+    scanner.targetRecipient = recipient;
+    var overlay = document.getElementById('scanner-overlay');
+    var video = document.getElementById('scanner-video');
+    var statusEl = document.getElementById('scanner-status');
+    statusEl.textContent = 'Starting camera...';
+    overlay.classList.add('active');
+
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    }).then(function (stream) {
+      scanner.stream = stream;
+      video.srcObject = stream;
+      video.play();
+      statusEl.textContent = 'Point camera at a QR code';
+      scanFrame();
+    }).catch(function () {
+      statusEl.textContent = 'Camera access denied.';
+    });
+  }
+
+  function scanFrame() {
+    var video = document.getElementById('scanner-video');
+    var canvas = document.getElementById('scanner-canvas');
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    if (video.readyState < video.HAVE_ENOUGH_DATA) {
+      scanner.animFrameId = requestAnimationFrame(scanFrame);
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    var code = jsQR(imageData.data, canvas.width, canvas.height, {
+      inversionAttempts: 'dontInvert'
+    });
+
+    if (code && code.data) {
+      var parsed = parseScannedData(code.data);
+      if (parsed.length > 0 && parsed[0].address) {
+        applyScanResult(parsed);
+        closeScannerInternal();
+        return;
+      }
+    }
+
+    scanner.animFrameId = requestAnimationFrame(scanFrame);
+  }
+
+  function applyScanResult(parsed) {
+    var target = scanner.targetRecipient;
+    // Apply the first parsed recipient to the target that triggered the scan
+    target.address = parsed[0].address;
+    if (parsed[0].amount) target.amount = parsed[0].amount;
+    if (parsed[0].memo) target.memo = parsed[0].memo;
+
+    // Add additional recipients from the scanned URI
+    for (var i = 1; i < parsed.length; i++) {
+      state.recipients.push({
+        id: state.nextId++,
+        address: parsed[i].address,
+        amount: parsed[i].amount || '',
+        memo: parsed[i].memo || ''
+      });
+    }
+
+    renderRecipients();
+  }
+
+  function closeScannerInternal() {
+    if (scanner.animFrameId) {
+      cancelAnimationFrame(scanner.animFrameId);
+      scanner.animFrameId = null;
+    }
+    if (scanner.stream) {
+      scanner.stream.getTracks().forEach(function (t) { t.stop(); });
+      scanner.stream = null;
+    }
+    var video = document.getElementById('scanner-video');
+    video.srcObject = null;
+    document.getElementById('scanner-overlay').classList.remove('active');
+    scanner.targetRecipient = null;
+  }
+
+  window.closeScanner = function () {
+    closeScannerInternal();
   };
 
   // --- Helpers ---

@@ -1,7 +1,8 @@
-var CACHE_NAME = 'zip321-v1';
+var CACHE_NAME = 'zip321-v2';
 var URLS_TO_CACHE = [
   'zip-0321-tool.html',
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js'
+  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+  'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'
 ];
 
 self.addEventListener('install', function (event) {
